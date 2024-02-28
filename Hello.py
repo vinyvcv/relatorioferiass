@@ -1,50 +1,88 @@
-# Copyright 2018-2022 Streamlit Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import streamlit as st
-from streamlit.logger import get_logger
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 
-LOGGER = get_logger(__name__)
+# Configurações iniciais do Streamlit
+st.set_page_config(layout='wide', page_title='Planejamento Anual de Férias')
+st.sidebar.image('hapvidalogo.png', width=200)
+st.image('hapvidalogo.png', width=500)
 
-def run():
-    st.set_page_config(
-        page_title="Hello",
-        page_icon="👋",
-    )
+# Carregar dados do Excel
+excel_path = 'Quadro_Combinado_Atualizado_Com_Anos.xlsx'
+df = pd.read_excel(excel_path)
 
-    st.write("# Welcome to Streamlit! 👋")
+# Preparação dos dados
+df['LIMITE'] = pd.to_datetime(df['LIMITE'], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y')
+df['INÍCIO'] = pd.to_datetime(df['INÍCIO'], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y')
+df['FIM'] = pd.to_datetime(df['FIM'], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y')
+df['ANO LIMITE'] = pd.to_datetime(df['LIMITE'], format='%d/%m/%Y').dt.year
+df['ANO LIMITE'] = df['ANO LIMITE'].fillna(0).astype(int)
 
-    st.sidebar.success("Select a demo above.")
+# Sidebar com filtros
+st.sidebar.header('Filtros')
+todos_responsaveis = ['Selecionar Tudo'] + list(df['RESPONSAVEL'].unique())
+selecao_responsavel = st.sidebar.multiselect('Selecione o Responsável', options=todos_responsaveis, default=['Selecionar Tudo'])
+todos_meses = ['Selecionar Tudo'] + list(df['MÊS FÉRIAS'].dropna().unique())
+selecao_mes = st.sidebar.multiselect('Selecione o Mês de Férias', options=todos_meses, default=['Selecionar Tudo'])
+todos_servicos = ['Selecionar Tudo'] + list(df['SERVIÇO'].unique())
+selecao_servico = st.sidebar.multiselect('Selecione o Serviço', options=todos_servicos, default=['Selecionar Tudo'])
 
-    st.markdown(
-        """
-        Streamlit is an open-source app framework built specifically for
-        Machine Learning and Data Science projects.
-        **👈 Select a demo from the sidebar** to see some examples
-        of what Streamlit can do!
-        ### Want to learn more?
-        - Check out [streamlit.io](https://streamlit.io)
-        - Jump into our [documentation](https://docs.streamlit.io)
-        - Ask a question in our [community
-          forums](https://discuss.streamlit.io)
-        ### See more complex demos
-        - Use a neural net to [analyze the Udacity Self-driving Car Image
-          Dataset](https://github.com/streamlit/demo-self-driving)
-        - Explore a [New York City rideshare dataset](https://github.com/streamlit/demo-uber-nyc-pickups)
-    """
-    )
+# Aplicando os filtros
+filtered_df = df.copy()
+if 'Selecionar Tudo' not in selecao_responsavel:
+    filtered_df = filtered_df[filtered_df['RESPONSAVEL'].isin(selecao_responsavel)]
+if 'Selecionar Tudo' not in selecao_mes:
+    filtered_df = filtered_df[filtered_df['MÊS FÉRIAS'].isin(selecao_mes)]
+if 'Selecionar Tudo' not in selecao_servico:
+    filtered_df = filtered_df[filtered_df['SERVIÇO'].isin(selecao_servico)]
+
+# Exibição dos dados filtrados
+if st.button('Mostrar Detalhes dos Funcionários'):
+    st.dataframe(filtered_df[['NOME', 'SERVIÇO','RESPONSAVEL', 'MÊS FÉRIAS', 'LIMITE', 'INÍCIO', 'FIM', 'QUANTIDADE']], width=1500, height=800)
+
+# Código para os gráficos segue aqui...
+
+meses_ordem = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 
+               'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO']
+df['MÊS FÉRIAS'] = pd.Categorical(df['MÊS FÉRIAS'], categories=meses_ordem, ordered=True)
+
+# Gráficos
+# Quantidade de Funcionários por Serviço
+servico_counts = df['SERVIÇO'].value_counts()
+fig_servico = px.bar(servico_counts, title="Funcionários por Serviço", labels={'index': 'Serviço', 'value': 'Quantidade'}, color_discrete_sequence=['blue']) 
+fig_servico.update_layout(width=1200)
+st.plotly_chart(fig_servico) 
 
 
-if __name__ == "__main__":
-    run()
+# Funcionários Tirando Férias por Mês
+ferias_counts = df['MÊS FÉRIAS'].value_counts().sort_index()
+fig_ferias = px.bar(ferias_counts, title="Funcionários Tirando Férias por Mês", labels={'index': 'Mês', 'value': 'Quantidade'}, color_discrete_sequence=['yellow'])
+fig_ferias.update_layout(width=1200)
+st.plotly_chart(fig_ferias)
+
+# Funcionários com Limite por Mês
+# Nota: Requer ajuste na coluna 'LIMITE' conforme sua estrutura de dados
+
+
+
+
+# Mapeamento dos meses para ordenação
+meses_ordem = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 
+               'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO']
+
+# Certifique-se de que a coluna 'MÊS FÉRIAS' está em maiúsculas
+df['MÊS FÉRIAS'] = df['MÊS FÉRIAS'].str.upper()
+
+# Crie uma nova coluna 'MÊS ORDEM' com base na lista de ordenação de meses
+df['MÊS ORDEM'] = df['MÊS FÉRIAS'].apply(lambda x: meses_ordem.index(x) if x in meses_ordem else -1)
+
+# Filtrar o DataFrame pelo responsável selecionado na interface do usuário
+responsavel_selecionado = st.sidebar.selectbox('Selecione o Responsável', options=df['RESPONSAVEL'].unique(), key='select_responsavel')
+
+# Filtragem de dados pelo responsável e pela coluna 'LIMITE' já convertida para o formato de data
+df_filtrado = df[(df['RESPONSAVEL'] == responsavel_selecionado)]
+
+
+
+
